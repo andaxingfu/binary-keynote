@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>二进制 · Binary — Dark Keynote</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root { --bg:#0A0B0F; --text:#E8EAF0; --dim:#8A90A0; --accent:#B7F34A; --red:#FF5A5F; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { width:100%; height:100%; background:var(--bg); color:var(--text); font-family:Inter,system-ui,sans-serif; overflow:hidden; }
+  #stage-wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
+  canvas { display:block; width:100vw; height:100vh; cursor:pointer; }
+  #cover {
+    position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:radial-gradient(ellipse at 50% 34%, #151822 0%, #0A0B0F 70%);
+    z-index:10; cursor:pointer; text-align:center; padding:24px;
+  }
+  #cover h1 { font-family:"Inter Tight",Inter,sans-serif; font-weight:700; font-size:clamp(42px,8vw,96px); letter-spacing:-0.04em; margin-bottom:12px; }
+  #cover .en { color:var(--dim); font-size:clamp(14px,2vw,20px); margin-bottom:36px; }
+  #cover .go {
+    display:inline-flex; align-items:center; gap:10px; padding:14px 28px; border-radius:999px;
+    border:1px solid rgba(255,255,255,.12); background:rgba(18,21,28,.85); color:var(--text);
+    font-weight:500; font-size:16px; transition:border-color .2s, transform .15s;
+  }
+  #cover .go:hover { border-color:var(--accent); transform:translateY(-1px); }
+  #cover .dot { width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 12px var(--accent); }
+  #hud {
+    position:fixed; left:0; right:0; bottom:0; padding:16px 24px 20px; z-index:5;
+    display:flex; align-items:center; gap:16px; background:linear-gradient(transparent, rgba(0,0,0,.55));
+    opacity:0; pointer-events:none; transition:opacity .25s;
+  }
+  #hud.show { opacity:1; pointer-events:auto; }
+  #btn-play, #btn-replay {
+    background:rgba(18,21,28,.9); border:1px solid rgba(255,255,255,.1); color:var(--text);
+    border-radius:10px; padding:10px 16px; font:500 13px Inter,system-ui; cursor:pointer;
+  }
+  #btn-play:hover, #btn-replay:hover { border-color:rgba(183,243,74,.5); }
+  #progress { flex:1; height:4px; border-radius:2px; background:rgba(255,255,255,.08); cursor:pointer; position:relative; }
+  #bar { position:absolute; left:0; top:0; bottom:0; width:0%; background:var(--accent); border-radius:2px; }
+  #time { font:500 12px "JetBrains Mono",monospace; color:var(--dim); min-width:92px; text-align:right; }
+  #endcard {
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column;
+    background:rgba(10,11,15,.92); z-index:8; text-align:center;
+  }
+  #endcard.show { display:flex; }
+  #endcard p { color:var(--dim); margin:8px 0 24px; }
+</style>
+</head>
+<body>
+<div id="cover">
+  <h1>二进制</h1>
+  <div class="en">BINARY · Dark Keynote</div>
+  <div class="go"><span class="dot"></span>点击开始 · Tap to play</div>
+</div>
+<div id="stage-wrap"><canvas id="c" width="1920" height="1080"></canvas></div>
+<div id="hud">
+  <button id="btn-play" type="button">暂停</button>
+  <div id="progress"><div id="bar"></div></div>
+  <div id="time">0:00 / 1:15</div>
+  <button id="btn-replay" type="button">重播</button>
+</div>
+<div id="endcard">
+  <h1 style="font-family:'Inter Tight',Inter,sans-serif;font-size:48px;letter-spacing:-.03em;">停。</h1>
+  <p>这一次，由你来填。</p>
+  <button id="btn-again" class="go" style="padding:12px 24px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(18,21,28,.85);color:#E8EAF0;cursor:pointer;">再看一遍</button>
+</div>
+<script>
+(() => {
+  const W = 1920, H = 1080, TOTAL = 75;
+  const PAL = {
+    bg0:"#0A0B0F", bg1:"#151822", surf:"#12151C", surf2:"#1A1E28",
+    text:"#E8EAF0", dim:"#8A90A0", mute:"#5C6272",
+    accent:"#B7F34A", red:"#FF5A5F", cool:"#3B4CCA"
+  };
+  const beats = [
+    { t:0.0,  scene:"hook_on",   chapter:"00 序", cn:"亮。", en:"On.", speak:"亮。" },
+    { t:2.5,  scene:"hook_off",  cn:"灭。", en:"Off.", speak:"下一秒呢？", toast:"下一秒呢？ · What comes next?" },
+    { t:5.0,  scene:"hook_two",  cn:"只有两种可能。", en:"Only two states.", speak:"只有两种可能。", toast:"信息，最干净。" },
+    { t:8.0,  scene:"title",     cn:"二进制", en:"BINARY", speak:"这就是二进制。", toast:"两个符号，描述整个世界。" },
+    { t:14.0, scene:"lamp",      chapter:"01 比特", cn:"一盏灯。", en:"A lamp.", speak:"一盏灯。开，或者关。", toast:"开，或者关。" },
+    { t:20.0, scene:"bit",       cn:"一个比特。", en:"One bit.", speak:"这就是一个比特。", toast:"信息的最小单位。", bits:1 },
+    { t:26.0, scene:"byte",      cn:"八个比特 · 一字节", en:"Eight bits · one byte", speak:"八个比特，叫一字节。", toast:"足以写下任何一个字母。", bits:8 },
+    { t:32.0, scene:"powers",    chapter:"02 权重", cn:"位置，决定重量。", en:"Place decides weight.", speak:"位置，决定重量。", eq:"2⁰  2¹  2²  2³  2⁴  2⁵  2⁶  2⁷" },
+    { t:38.0, scene:"decode",    cn:"1 0 1 1", en:"", speak:"一零一一，等于十一。", eq:"1·8 + 0·4 + 1·2 + 1·1  =  11₁₀", toast:"二进制 1011 = 十进制 11" },
+    { t:44.0, scene:"noise",     chapter:"03 摩擦", cn:"一位翻转。", en:"One bit flips.", speak:"一位翻转，意义就变了。", eq:"1011 → 1001", toast:"十一，变成九。", problem:true },
+    { t:50.0, scene:"ecc",       cn:"所以要冗余。", en:"So we add redundancy.", speak:"所以要冗余。", toast:"多写几位，才能在噪声里活下来。", eq:"data + parity → recoverable" },
+    { t:56.0, scene:"scale",     chapter:"04 尺度", cn:"", en:"", speak:"二的十次方，约一千。", giant:"2¹⁰", toast:"≈ 1,024 · a kibibyte" },
+    { t:61.0, scene:"voyager",   cn:"旅行者金唱片。", en:"Voyager Golden Record.", speak:"旅行者金唱片。", toast:"凹槽里的二进制，飞向未知。" },
+    { t:66.0, scene:"philo",     chapter:"05 余响", cn:"世界，可被问成是与否。", en:"Yes or no.", speak:"世界，可以被问成一连串的是与否。", toast:"每一个答案，是一个比特。" },
+    { t:70.0, scene:"callback",  cn:"亮。", en:"", speak:"下一秒呢？", toast:"这一次，由你来填。" },
+    { t:73.5, scene:"stop",      cn:"停。", en:"Stop.", speak:"停。" },
+  ];
+
+  const cv = document.getElementById("c");
+  const ctx = cv.getContext("2d");
+  const cover = document.getElementById("cover");
+  const hud = document.getElementById("hud");
+  const bar = document.getElementById("bar");
+  const timeEl = document.getElementById("time");
+  const btnPlay = document.getElementById("btn-play");
+  const btnReplay = document.getElementById("btn-replay");
+  const endcard = document.getElementById("endcard");
+  const progress = document.getElementById("progress");
+
+  let playing=false, started=false, t0=0, elapsed=0, lastIdx=-1, spoken=-1;
+  let ac=null, master=null, unlocked=false;
+  let bitStates = [1,0,1,1,0,0,0,0];
+  let interactBits = false;
+
+  function rgba(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`; }
+  function lerp(a,b,t){ return a+(b-a)*t; }
+  function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+  function easeOut(t){ return 1-Math.pow(1-t,3); }
+  function backOut(t){ const s=1.3; t=t-1; return t*t*((s+1)*t+s)+1; }
+  function fmt(s){ s=Math.floor(s); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
+
+  function ensureAudio(){
+    if(ac) return ac;
+    ac = new (window.AudioContext||window.webkitAudioContext)();
+    master = ac.createGain(); master.gain.value = 0.7; master.connect(ac.destination);
+    return ac;
+  }
+  function unlock(){
+    ensureAudio();
+    return ac.resume().then(()=>{ unlocked=true; startBed(); return ac; }).catch(()=>ac);
+  }
+  function tone(freq, dur, type, vol, when){
+    if(!ac||!unlocked) return;
+    const t = (when==null? ac.currentTime : when);
+    const o=ac.createOscillator(), g=ac.createGain(), f=ac.createBiquadFilter();
+    o.type=type||"sine"; o.frequency.value=freq;
+    f.type="lowpass"; f.frequency.value=2200;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol||0.08, t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+(dur||0.12));
+    o.connect(f); f.connect(g); g.connect(master);
+    o.start(t); o.stop(t+(dur||0.12)+0.02);
+  }
+  function tick(){ tone(880,0.05,"triangle",0.05); }
+  function snap(){ tone(220,0.08,"sine",0.1); tone(440,0.06,"triangle",0.04); }
+  function whoosh(){ tone(120,0.25,"sawtooth",0.03); }
+  function danger(){ tone(160,0.18,"square",0.06); tone(140,0.2,"square",0.04); }
+  function good(){ tone(523,0.1,"sine",0.07); tone(784,0.12,"triangle",0.04); }
+
+  let bedNodes=null;
+  function startBed(){
+    if(bedNodes||!ac) return;
+    const pad=ac.createOscillator(), pg=ac.createGain(), plp=ac.createBiquadFilter();
+    pad.type="sine"; pad.frequency.value=87.31;
+    plp.type="lowpass"; plp.frequency.value=300;
+    pg.gain.value=0.05;
+    pad.connect(plp); plp.connect(pg); pg.connect(master); pad.start();
+    const pulse=ac.createOscillator(), pug=ac.createGain();
+    pulse.type="sine"; pulse.frequency.value=1.0; // LFO-ish via gain modulation substitute: soft click timer below
+    pug.gain.value=0;
+    pulse.connect(pug); pug.connect(master); pulse.start();
+    bedNodes={pad,pg};
+    // soft pulse every 0.5s while playing
+    bedNodes.timer = setInterval(()=>{
+      if(playing) tone(98,0.22,"sine",0.035);
+    }, 500);
+  }
+  function stopBed(){
+    if(!bedNodes) return;
+    clearInterval(bedNodes.timer);
+    try{ bedNodes.pad.stop(); }catch(_){}
+    bedNodes=null;
+  }
+
+  function speak(text){
+    if(!text || !window.speechSynthesis) return;
+    try{
+      window.speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance(text);
+      u.lang="zh-CN"; u.rate=0.92; u.pitch=1.0;
+      const voices=window.speechSynthesis.getVoices();
+      const zh=voices.find(v=>/zh|Chinese|Ting|Xiaoxiao|Yun/i.test(v.name+v.lang));
+      if(zh) u.voice=zh;
+      window.speechSynthesis.speak(u);
+    }catch(_){}
+  }
+
+  function beatAt(t){
+    let i=0; for(let k=0;k<beats.length;k++) if(beats[k].t<=t) i=k; return i;
+  }
+
+  function drawBg(g){
+    g.fillStyle=PAL.bg0; g.fillRect(0,0,W,H);
+    const gr=g.createRadialGradient(W*0.5,H*0.34,0,W*0.5,H*0.34,W*0.75);
+    gr.addColorStop(0,rgba(PAL.bg1,0.95)); gr.addColorStop(1,rgba(PAL.bg0,0));
+    g.fillStyle=gr; g.fillRect(0,0,W,H);
+    const cool=g.createRadialGradient(W*0.78,H*0.12,0,W*0.78,H*0.12,900);
+    cool.addColorStop(0,rgba(PAL.cool,0.08)); cool.addColorStop(1,rgba(PAL.cool,0));
+    g.fillStyle=cool; g.fillRect(0,0,W,H);
+  }
+  function drawGrid(g, alpha){
+    const step=48; g.save(); g.lineWidth=1;
+    for(let pass=0;pass<2;pass++){
+      g.strokeStyle=`rgba(255,255,255,${(pass?0.06:0.032)*(alpha||1)})`;
+      g.beginPath();
+      for(let x=0;x<=W;x+=step){
+        if(((x/step)|0)%4===0 !== !!pass) continue;
+        g.moveTo(x+0.5,0); g.lineTo(x+0.5,H);
+      }
+      for(let y=0;y<=H;y+=step){
+        if(((y/step)|0)%4===0 !== !!pass) continue;
+        g.moveTo(0,y+0.5); g.lineTo(W,y+0.5);
+      }
+      g.stroke();
+    }
+    g.restore();
+  }
+  function vignette(g,a){
+    const gr=g.createRadialGradient(W/2,H/2,H*0.35,W/2,H/2,H*1.05);
+    gr.addColorStop(0,"rgba(0,0,0,0)"); gr.addColorStop(1,`rgba(0,0,0,${a||0.55})`);
+    g.fillStyle=gr; g.fillRect(0,0,W,H);
+  }
+  function panel(g,x,y,w,h,r){
+    g.save();
+    g.beginPath(); g.roundRect(x,y,w,h,r||16);
+    g.fillStyle=PAL.surf2; g.fill();
+    g.strokeStyle="rgba(255,255,255,.08)"; g.lineWidth=1; g.stroke();
+    g.beginPath(); g.roundRect(x+1,y+1,w-2,2,1);
+    g.fillStyle="rgba(255,255,255,.06)"; g.fill();
+    g.restore();
+  }
+  function drawToast(g, text, a){
+    if(!text||a<=0) return;
+    g.save(); g.globalAlpha=a;
+    g.font="500 36px Inter,system-ui";
+    const tw=g.measureText(text).width;
+    const pw=tw+56, ph=64, x=(W-pw)/2, y=H-140;
+    g.beginPath(); g.roundRect(x,y,pw,ph,32);
+    g.fillStyle="rgba(18,21,28,.88)"; g.fill();
+    g.strokeStyle="rgba(255,255,255,.12)"; g.stroke();
+    g.beginPath(); g.arc(x+28,y+ph/2,5,0,Math.PI*2);
+    g.fillStyle=PAL.accent; g.fill();
+    g.fillStyle=PAL.text; g.textAlign="left"; g.textBaseline="middle";
+    g.fillText(text, x+44, y+ph/2+1);
+    g.restore();
+  }
+  function drawChapter(g, text){
+    if(!text) return;
+    g.save();
+    g.font="500 18px JetBrains Mono,monospace";
+    g.fillStyle=PAL.mute; g.textAlign="left"; g.textBaseline="top";
+    g.fillText(text, 64, 48);
+    g.restore();
+  }
+  function drawHeadline(g, cn, en, y){
+    y=y||H*0.42;
+    g.save();
+    g.font="700 92px 'Inter Tight',Inter,sans-serif";
+    g.fillStyle=PAL.text; g.textAlign="center"; g.textBaseline="middle";
+    g.fillText(cn||"", W/2, y);
+    if(en){
+      g.font="500 28px Inter,system-ui";
+      g.fillStyle=PAL.dim;
+      g.fillText(en, W/2, y+64);
+    }
+    g.restore();
+  }
+  function drawEq(g, eq){
+    if(!eq) return;
+    g.save();
+    const w=Math.min(1100, 40+eq.length*18), h=72, x=(W-w)/2, y=H*0.58;
+    panel(g,x,y,w,h,14);
+    g.font="500 28px JetBrains Mono,monospace";
+    g.fillStyle=PAL.accent; g.textAlign="center"; g.textBaseline="middle";
+    g.fillText(eq, W/2, y+h/2+1);
+    g.restore();
+  }
+  function drawBits(g, n, localT, interactive){
+    const count=n||4;
+    const size=72, gap=18;
+    const total=count*size+(count-1)*gap;
+    const x0=(W-total)/2, y=H*0.52;
+    for(let i=0;i<count;i++){
+      const on = !!bitStates[i];
+      const x=x0+i*(size+gap);
+      const pop=clamp((localT-i*0.04)/0.25,0,1);
+      const s=lerp(0.7,1,backOut(pop));
+      g.save();
+      g.translate(x+size/2,y+size/2); g.scale(s,s); g.translate(-size/2,-size/2);
+      g.beginPath(); g.roundRect(0,0,size,size,14);
+      g.fillStyle=on?rgba(PAL.accent,0.18):PAL.surf;
+      g.fill();
+      g.strokeStyle=on?PAL.accent:"rgba(255,255,255,.1)";
+      g.lineWidth=on?2:1; g.stroke();
+      g.font="600 28px JetBrains Mono,monospace";
+      g.fillStyle=on?PAL.accent:PAL.dim;
+      g.textAlign="center"; g.textBaseline="middle";
+      g.fillText(on?"1":"0", size/2, size/2+1);
+      g.restore();
+    }
+    interactBits = !!interactive;
+    window.__bitHit = {x0,y,size,gap,count};
+  }
+  function drawLamp(g, on, localT){
+    const r=90;
+    g.save();
+    g.translate(W/2, H*0.52);
+    const a=easeOut(clamp(localT/0.4,0,1));
+    g.globalAlpha=a;
+    if(on){
+      const gr=g.createRadialGradient(0,0,10,0,0,180);
+      gr.addColorStop(0,rgba(PAL.accent,0.45)); gr.addColorStop(1,rgba(PAL.accent,0));
+      g.fillStyle=gr; g.beginPath(); g.arc(0,0,180,0,Math.PI*2); g.fill();
+    }
+    g.beginPath(); g.arc(0,0,r,0,Math.PI*2);
+    g.fillStyle=on?rgba(PAL.accent,0.25):PAL.surf2; g.fill();
+    g.strokeStyle=on?PAL.accent:"rgba(255,255,255,.12)"; g.lineWidth=2; g.stroke();
+    g.font="600 36px JetBrains Mono,monospace";
+    g.fillStyle=on?PAL.accent:PAL.dim; g.textAlign="center"; g.textBaseline="middle";
+    g.fillText(on?"1":"0",0,2);
+    g.restore();
+  }
+  function drawGiant(g, text, localT){
+    const p=easeOut(clamp(localT/0.5,0,1));
+    g.save();
+    g.globalAlpha=p;
+    g.font="700 220px 'Inter Tight',Inter,sans-serif";
+    g.fillStyle=PAL.accent; g.textAlign="center"; g.textBaseline="middle";
+    g.shadowColor=rgba(PAL.accent,0.45); g.shadowBlur=40;
+    g.fillText(text, W/2, H*0.46);
+    g.restore();
+  }
+  function drawNoiseFlip(g, localT){
+    const flipped = localT>0.35;
+    g.save();
+    g.font="700 96px 'Inter Tight',Inter,sans-serif";
+    g.textAlign="center"; g.textBaseline="middle";
+    g.fillStyle=PAL.text;
+    g.fillText(flipped?"1 0 0 1":"1 0 1 1", W/2, H*0.44);
+    if(flipped){
+      g.font="600 22px JetBrains Mono,monospace";
+      g.fillStyle=PAL.red;
+      g.fillText("BIT FLIP · ERROR", W/2, H*0.44+70);
+    }
+    g.restore();
+  }
+
+  function render(t){
+    const idx=beatAt(t);
+    const b=beats[idx];
+    const local=t-b.t;
+    const nextT = beats[idx+1]?beats[idx+1].t:TOTAL;
+    const toastA = clamp(Math.min(local*4, (nextT-t)*3, 1),0,1);
+
+    drawBg(ctx);
+    drawGrid(ctx, b.scene==="noise"?0.35:1);
+    drawChapter(ctx, b.chapter || (beats.slice(0,idx+1).reverse().find(x=>x.chapter)||{}).chapter);
+
+    if(b.scene==="hook_on"){
+      drawLamp(ctx, true, local);
+      drawHeadline(ctx, b.cn, b.en, H*0.28);
+    } else if(b.scene==="hook_off"){
+      drawLamp(ctx, false, local);
+      drawHeadline(ctx, b.cn, b.en, H*0.28);
+    } else if(b.scene==="hook_two"){
+      drawHeadline(ctx, b.cn, b.en, H*0.4);
+      // two cells
+      const s=88; 
+      [["0",false],["1",true]].forEach((pair,i)=>{
+        const x=W/2-120+i*150, y=H*0.58;
+        ctx.beginPath(); ctx.roundRect(x,y,s,s,14);
+        ctx.fillStyle=pair[1]?rgba(PAL.accent,0.18):PAL.surf; ctx.fill();
+        ctx.strokeStyle=pair[1]?PAL.accent:"rgba(255,255,255,.1)"; ctx.stroke();
+        ctx.font="600 32px JetBrains Mono,monospace";
+        ctx.fillStyle=pair[1]?PAL.accent:PAL.dim; ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.fillText(pair[0], x+s/2, y+s/2+1);
+      });
+    } else if(b.scene==="title"){
+      // light reveal mask approx via alpha grow
+      const reveal=easeOut(clamp(local/1.1,0,1));
+      ctx.save(); ctx.globalAlpha=reveal;
+      drawHeadline(ctx, "二进制", "BINARY", H*0.42);
+      ctx.restore();
+      // accent underline
+      ctx.fillStyle=rgba(PAL.accent, reveal);
+      ctx.fillRect(W/2-80, H*0.42+56, 160*reveal, 3);
+    } else if(b.scene==="lamp"){
+      drawHeadline(ctx, b.cn, b.en, H*0.26);
+      drawLamp(ctx, true, local);
+    } else if(b.scene==="bit"){
+      drawHeadline(ctx, b.cn, b.en, H*0.28);
+      drawBits(ctx, 1, local, true);
+    } else if(b.scene==="byte"){
+      drawHeadline(ctx, b.cn, b.en, H*0.28);
+      drawBits(ctx, 8, local, true);
+    } else if(b.scene==="powers" || b.scene==="decode" || b.scene==="ecc" || b.scene==="voyager" || b.scene==="philo"){
+      drawHeadline(ctx, b.cn, b.en, H*0.36);
+      drawEq(ctx, b.eq);
+    } else if(b.scene==="noise"){
+      drawHeadline(ctx, b.cn, b.en, H*0.26);
+      drawNoiseFlip(ctx, local);
+      drawEq(ctx, b.eq);
+    } else if(b.scene==="scale"){
+      drawGiant(ctx, b.giant||"2¹⁰", local);
+    } else if(b.scene==="callback"){
+      drawLamp(ctx, true, local);
+      drawHeadline(ctx, "亮。", "", H*0.28);
+    } else if(b.scene==="stop"){
+      drawHeadline(ctx, "停。", "Stop.", H*0.45);
+    }
+
+    drawToast(ctx, b.toast||"", toastA);
+    vignette(ctx, 0.52);
+  }
+
+  function applySpeak(idx){
+    if(idx===spoken) return;
+    spoken=idx;
+    const b=beats[idx];
+    if(b.problem) danger(); else if(b.scene==="ecc"||b.scene==="byte"){ snap(); good(); }
+    else if(b.scene==="title"||b.scene==="scale") whoosh();
+    else tick();
+    speak(b.speak||"");
+  }
+
+  function frame(now){
+    if(playing){
+      elapsed = (now - t0)/1000;
+      if(elapsed>=TOTAL){
+        elapsed=TOTAL; playing=false; btnPlay.textContent="播放";
+        endcard.classList.add("show");
+        try{ speechSynthesis.cancel(); }catch(_){}
+      } else {
+        const idx=beatAt(elapsed);
+        if(idx!==lastIdx){ lastIdx=idx; applySpeak(idx); }
+      }
+    }
+    render(elapsed);
+    bar.style.width = ((elapsed/TOTAL)*100)+"%";
+    timeEl.textContent = fmt(elapsed)+" / "+fmt(TOTAL);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  function play(){
+    unlock().then(()=>{
+      if(elapsed>=TOTAL) elapsed=0;
+      playing=true; started=true;
+      t0 = performance.now() - elapsed*1000;
+      btnPlay.textContent="暂停";
+      hud.classList.add("show");
+      cover.style.display="none";
+      endcard.classList.remove("show");
+      lastIdx=-1; spoken=-1;
+    });
+  }
+  function pause(){
+    playing=false; btnPlay.textContent="播放";
+    try{ speechSynthesis.cancel(); }catch(_){}
+  }
+  function seek(sec){
+    elapsed=clamp(sec,0,TOTAL);
+    t0=performance.now()-elapsed*1000;
+    lastIdx=-1; spoken=-1;
+    endcard.classList.remove("show");
+  }
+
+  cover.addEventListener("click", play);
+  btnPlay.addEventListener("click", ()=> playing?pause():play());
+  btnReplay.addEventListener("click", ()=>{ seek(0); play(); });
+  document.getElementById("btn-again").addEventListener("click", ()=>{ seek(0); play(); });
+  progress.addEventListener("click", e=>{
+    const r=progress.getBoundingClientRect();
+    seek(((e.clientX-r.left)/r.width)*TOTAL);
+    if(!playing) play();
+  });
+  cv.addEventListener("click", e=>{
+    if(!started){ play(); return; }
+    if(interactBits && window.__bitHit){
+      const rect=cv.getBoundingClientRect();
+      const sx=W/rect.width, sy=H/rect.height;
+      const x=(e.clientX-rect.left)*sx, y=(e.clientY-rect.top)*sy;
+      const h=window.__bitHit;
+      for(let i=0;i<h.count;i++){
+        const bx=h.x0+i*(h.size+h.gap);
+        if(x>=bx&&x<=bx+h.size&&y>=h.y&&y<=h.y+h.size){
+          bitStates[i]=bitStates[i]?0:1; tick(); return;
+        }
+      }
+    }
+    playing?pause():play();
+  });
+
+  // scale canvas CSS already full viewport; draw in 1920x1080 logical via transform
+  function fit(){
+    // keep internal 1920x1080; CSS stretches
+  }
+  window.addEventListener("resize", fit); fit();
+  if(window.speechSynthesis) speechSynthesis.getVoices();
+})();
+</script>
+</body>
+</html>
